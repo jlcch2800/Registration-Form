@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>院區交通車物件傳送登記系統</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0284c7; --primary-light: #e0f2fe; --secondary: #0ea5e9;
+            --bg-color: #f8fafc; --card-bg: #ffffff; --text-main: #334155;
+            --text-muted: #64748b; --border: #e2e8f0;
+        }
+        * { box-sizing: border-box; font-family: 'Noto Sans TC', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { max-width: 800px; width: 100%; }
+        .header { text-align: center; margin-bottom: 24px; }
+        .header h1 { color: var(--primary); margin: 0 0 8px 0; font-size: 24px; }
+        .header p { color: var(--text-muted); margin: 0; font-size: 14px; }
+        .card { background: var(--card-bg); border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); margin-bottom: 24px; }
+        .section-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--primary); display: flex; align-items: center; }
+        .section-title::before { content: ''; display: inline-block; width: 4px; height: 16px; background-color: var(--secondary); margin-right: 8px; border-radius: 2px; }
+        .route-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .route-btn { background: var(--card-bg); border: 2px solid var(--border); border-radius: 8px; padding: 12px; cursor: pointer; transition: 0.2s; text-align: center; font-size: 14px; font-weight: 500; }
+        .route-btn:hover { border-color: var(--secondary); background: var(--primary-light); }
+        .route-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3); }
+        .time-badge { display: block; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+        .form-row { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+        .form-group { flex: 1; min-width: 200px; }
+        .form-group label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; }
+        input[type="text"], select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; transition: 0.2s; }
+        input[type="text"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .toggle-group { display: flex; background: var(--bg-color); border-radius: 8px; padding: 4px; border: 1px solid var(--border); }
+        .toggle-btn { flex: 1; text-align: center; padding: 10px; cursor: pointer; border-radius: 6px; font-weight: 500; transition: 0.2s; }
+        .toggle-btn.active { background: var(--card-bg); box-shadow: 0 2px 4px rgba(0,0,0,0.1); color: var(--primary); }
+        .submit-btn { width: 100%; background: var(--primary); color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; margin-top: 10px; }
+        .submit-btn:hover { background: var(--secondary); }
+        .submit-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        th { background-color: var(--bg-color); color: var(--text-muted); font-weight: 500; }
+        .tag-send { background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .tag-receive { background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>院區交通車物件傳送登記系統</h1>
+        <p>佳里 ⇄ 總院 ⇄ 柳營 班次登記</p>
+    </div>
+
+    <!-- 步驟 1：選擇班次與路線 -->
+    <div class="card">
+        <div class="section-title">步驟 1：選擇發車時間與路線</div>
+        <div class="route-grid" id="routeContainer"></div>
+    </div>
+
+    <!-- 步驟 2：輸入登記資訊 -->
+    <div class="card">
+        <div class="section-title">步驟 2：填寫收/寄件資訊</div>
+        <form id="registerForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>動作</label>
+                    <div class="toggle-group" id="actionToggle">
+                        <div class="toggle-btn active" data-action="寄件">寄件 (送出)</div>
+                        <div class="toggle-btn" data-action="收件">收件 (點收)</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>單位 (支援關鍵字搜尋)</label>
+                    <input list="unitList" id="unitInput" placeholder="請輸入或選擇單位" required autocomplete="off">
+                    <datalist id="unitList"></datalist>
+                </div>
+            </div>
+
+            <!-- 新增姓名與備註列 -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label>姓名</label>
+                    <input type="text" id="nameInput" placeholder="請輸入經手人姓名" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>物件備註 (選填)</label>
+                    <input type="text" id="noteInput" placeholder="例如：公文夾、檢體、藥品..." autocomplete="off">
+                </div>
+            </div>
+            
+            <button type="submit" class="submit-btn" id="submitBtn">新增登記紀錄</button>
+        </form>
+    </div>
+
+    <!-- 登記清單 -->
+    <div class="card">
+        <div class="section-title">今日成功登記紀錄</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>時間與路線</th>
+                    <th>動作</th>
+                    <th>單位</th>
+                    <th>姓名</th>
+                    <th>備註</th>
+                </tr>
+            </thead>
+            <tbody id="recordTableBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // ⚠️ 請將下方引號內換成您 Google Apps Script 的 /exec 網址 ⚠️
+    // ==========================================
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbyK19in5xdSI4MMHfeYNFsTedoVCwu4jrbZtbE2fwEsx4ALcVDxIv4ab1QPvxwE-pEeyw/exec';
+
+    const routes = [
+        { time: '08:15', path: '佳里 > 總院' },
+        { time: '10:15', path: '總院 > 佳里' },
+        { time: '12:15', path: '佳里 > 總院' },
+        { time: '13:00', path: '佳里 > 柳營' },
+        { time: '13:20', path: '柳營 > 佳里' },
+        { time: '14:15', path: '總院 > 佳里' },
+        { time: '15:05', path: '佳里 > 總院' }
+    ];
+
+    const units = [
+        "院長室", "醫務部", "護理部", "門診部", "急診部", "內科部", "外科部", "婦產部", "兒科部", "骨科部",
+        "復健科", "眼科", "耳鼻喉科", "牙科", "皮膚科", "精神科", "神經內科", "麻醉科", "放射線科", "病理科",
+        "檢驗科", "藥劑科", "營養科", "病歷室", "感染管制室", "企劃室", "醫事室", "總務室", "工務室", "資訊室",
+        "人事室", "會計室", "採購組", "出納組", "公關室", "社工室", "勞安室", "警衛室", "清潔組", "志工隊"
+    ];
+
+    let selectedRoute = routes[0];
+    let selectedAction = '寄件';
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderRoutes(); renderUnits(); setupToggle();
+    });
+
+    function renderRoutes() {
+        const container = document.getElementById('routeContainer');
+        routes.forEach((route, index) => {
+            const btn = document.createElement('div');
+            btn.className = `route-btn ${index === 0 ? 'active' : ''}`;
+            btn.innerHTML = `<span class="time-badge">${route.time}</span><span>${route.path}</span>`;
+            btn.onclick = () => {
+                document.querySelectorAll('.route-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedRoute = route;
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function renderUnits() {
+        const datalist = document.getElementById('unitList');
+        units.forEach(unit => {
+            const option = document.createElement('option');
+            option.value = unit;
+            datalist.appendChild(option);
+        });
+    }
+
+    function setupToggle() {
+        const btns = document.querySelectorAll('.toggle-btn');
+        btns.forEach(btn => {
+            btn.onclick = () => {
+                btns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedAction = btn.getAttribute('data-action');
+            };
+        });
+    }
+
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const unit = document.getElementById('unitInput').value;
+        const name = document.getElementById('nameInput').value;
+        const note = document.getElementById('noteInput').value || '-';
+        const submitBtn = document.getElementById('submitBtn');
+
+        if(!unit || !name) return alert('請完整填寫單位與姓名！');
+
+        submitBtn.disabled = true;
+        submitBtn.innerText = '資料傳送中...';
+
+        const data = {
+            time: selectedRoute.time,
+            path: selectedRoute.path,
+            action: selectedAction,
+            unit: unit,
+            name: name,
+            note: note
+        };
+
+        // 使用 Fetch API 將資料送往 Google Apps Script
+        fetch(scriptURL, {
+            method: 'POST',
+            mode: 'no-cors', // 避免瀏覽器 CORS 阻擋
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(() => {
+            // 因為使用 no-cors 模式無法讀取回傳內容，預設傳送成功
+            const tbody = document.getElementById('recordTableBody');
+            const tr = document.createElement('tr');
+            const tagClass = selectedAction === '寄件' ? 'tag-send' : 'tag-receive';
+            
+            tr.innerHTML = `
+                <td><strong>${selectedRoute.time}</strong> ${selectedRoute.path}</td>
+                <td><span class="${tagClass}">${selectedAction}</span></td>
+                <td>${unit}</td>
+                <td>${name}</td>
+                <td>${note}</td>
+            `;
+            tbody.insertBefore(tr, tbody.firstChild);
+
+            // 清空表單
+            document.getElementById('unitInput').value = '';
+            document.getElementById('nameInput').value = '';
+            document.getElementById('noteInput').value = '';
+            document.getElementById('unitInput').focus();
+            
+            submitBtn.disabled = false;
+            submitBtn.innerText = '新增登記紀錄';
+        })
+        .catch(error => {
+            console.error('Error!', error);
+            alert('傳送發生錯誤，請檢查網路連線。');
+            submitBtn.disabled = false;
+            submitBtn.innerText = '新增登記紀錄';
+        });
+    });
+</script>
+
+</body>
+</html>
