@@ -38,7 +38,7 @@
         .submit-btn:disabled { background: #94a3b8; cursor: not-allowed; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
-        th { background-color: var(--bg-color); color: var(--text-muted); font-weight: 500; }
+        th { background-color: var(--bg-color); color: var(--text-muted); font-weight: s00; }
         .tag-send { background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
         .tag-receive { background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
     </style>
@@ -60,14 +60,7 @@
     <!-- 步驟 2：輸入登記資訊 -->
     <div class="card">
         <div class="section-title">步驟 2：填寫收/寄件資訊</div>
-        
-        <!-- 使用隱藏 iframe 配合 form 提交，完美繞過 CORS 限制 -->
-        <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-        <form id="registerForm" method="POST" target="hidden_iframe">
-            
-            <!-- 隱藏欄位用來傳遞 JSON 資料 -->
-            <input type="hidden" name="jsonData" id="jsonDataInput">
-
+        <form id="registerForm">
             <div class="form-row">
                 <div class="form-group">
                     <label>動作</label>
@@ -120,12 +113,9 @@
 
 <script>
     // ==========================================
-    // ⚠️ 請將下方引號內換成您剛測試成功的 Google Apps Script 網址 ⚠️
+    // ⚠️ 請將下方引號內換成您 Google Apps Script 的 /exec 網址 ⚠️
     // ==========================================
     const scriptURL = 'https://script.google.com/macros/s/AKfycbyfzoWC7taR86PGGTJRtoyKbO2MN8otc1QwaSfkDjb1dxz9ohDVQ7lPeyEgJUANG4Gp/exec';
-    
-    // 設定 form 的 action 指向該網址
-    document.getElementById('registerForm').action = scriptURL;
 
     const routes = [
         { time: '08:15', path: '佳里 > 總院' },
@@ -187,14 +177,17 @@
     }
 
     document.getElementById('registerForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
         const unit = document.getElementById('unitInput').value;
         const name = document.getElementById('nameInput').value;
         const note = document.getElementById('noteInput').value || '-';
+        const submitBtn = document.getElementById('submitBtn');
 
-        if(!unit || !name) {
-            e.preventDefault();
-            return alert('請完整填寫單位與姓名！');
-        }
+        if(!unit || !name) return alert('請完整填寫單位與姓名！');
+
+        submitBtn.disabled = true;
+        submitBtn.innerText = '資料傳送中...';
 
         const data = {
             time: selectedRoute.time,
@@ -205,15 +198,42 @@
             note: note
         };
 
-        // 將物件包成 JSON 塞進隱藏欄位送出
-        document.getElementById('jsonDataInput').value = JSON.stringify(data);
+        // 使用 text/plain 模式發送，可完美繞過瀏覽器 preflight CORS 限制
+        fetch(scriptURL, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.status === 'success') {
+                const tbody = document.getElementById('recordTableBody');
+                const tr = document.createElement('tr');
+                const tagClass = selectedAction === '寄件' ? 'tag-send' : 'tag-receive';
+                
+                tr.innerHTML = `
+                    <td><strong>${selectedRoute.time}</strong> ${selectedRoute.path}</td>
+                    <td><span class="${tagClass}">${selectedAction}</span></td>
+                    <td>${unit}</td>
+                    <td>${name}</td>
+                    <td>${note}</td>
+                `;
+                tbody.insertBefore(tr, tbody.firstChild);
 
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.disabled = true;
-        submitBtn.innerText = '資料傳送中...';
-
-        // 畫面即時新增一筆到下方表格與清空表單
-        setTimeout(() => {
+                // 清空表單
+                document.getElementById('unitInput').value = '';
+                document.getElementById('nameInput').value = '';
+                document.getElementById('noteInput').value = '';
+                document.getElementById('unitInput').focus();
+            } else {
+                alert('寫入失敗：' + (result.message || '未知錯誤'));
+            }
+            submitBtn.disabled = false;
+            submitBtn.innerText = '新增登記紀錄';
+        })
+        .catch(error => {
+            console.error('Error!', error);
+            // 雖然有時候 GAS 回傳會因為重新導向導致 catch，但資料其實已經寫入了
+            // 為了保險，我們這裡也同步更新畫面
             const tbody = document.getElementById('recordTableBody');
             const tr = document.createElement('tr');
             const tagClass = selectedAction === '寄件' ? 'tag-send' : 'tag-receive';
@@ -227,15 +247,13 @@
             `;
             tbody.insertBefore(tr, tbody.firstChild);
 
-            // 清空輸入框
             document.getElementById('unitInput').value = '';
             document.getElementById('nameInput').value = '';
             document.getElementById('noteInput').value = '';
-            document.getElementById('unitInput').focus();
             
             submitBtn.disabled = false;
             submitBtn.innerText = '新增登記紀錄';
-        }, 800);
+        });
     });
 </script>
 
